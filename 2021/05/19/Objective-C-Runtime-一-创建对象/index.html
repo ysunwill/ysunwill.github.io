@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
+  <meta name="description" content="ysunwill&#39;s blog">
+  <meta name="keyword" content="">
+  
+    <link rel="shortcut icon" href="/css/images/logo.png">
+  
+  <title>
+    
+      Objective-C Runtime(一) : 创建对象 | ysunwill
+    
+  </title>
+  <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/tomorrow.min.css" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/geopattern/1.2.3/js/geopattern.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+  
+  
+  
+  
+    <!-- MathJax support START -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      });
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      });
+    </script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <!-- MathJax support END -->
+  
+
+
+  
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K5EQ3R1VEC"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-K5EQ3R1VEC');
+    </script>
+
+<meta name="generator" content="Hexo 5.4.0"></head>
+<div class="wechat-share">
+  <img src="/css/images/logo.png" />
+</div>
+
+  <body>
+    <header class="header fixed-header">
+  <div class="header-container">
+    <a class="home-link" href="/">
+      <div class="logo"></div>
+      <span>ysunwill</span>
+    </a>
+    <ul class="right-list">
+      
+        <li class="list-item">
+          
+            <a href="/" class="item-link">Home</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a href="/archives/" class="item-link">Archives</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="item-link">GitHub</a>
+          
+        </li>
+      
+    </ul>
+    <div class="menu">
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </div>
+    <div class="menu-mask">
+      <ul class="menu-list">
+        
+          <li class="menu-item">
+            
+              <a href="/" class="menu-link">Home</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a href="/archives/" class="menu-link">Archives</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="menu-link">GitHub</a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</header>
+
+    <div id="article-banner">
+  <h2>Objective-C Runtime(一) : 创建对象</h2>
+  <p class="post-date">2021-05-19</p>
+  <div class="arrow-down">
+    <a href="javascript:;"></a>
+  </div>
+</div>
+<main class="app-body flex-box">
+  <!-- Article START -->
+  <article class="post-article">
+    <section class="markdown-content"><p>可能每天都跟对象打交道，但是OC对象是怎么创建出来的，具体是怎样的一个流程，让我们通过调试Runtime源码一探究竟。以下内容基于objc4-818.2版本源码探索。</p>
+<h1 id="Tagged-Pointer"><a href="#Tagged-Pointer" class="headerlink" title="Tagged Pointer"></a>Tagged Pointer</h1><p>先说下比较特殊的“对象”，Tagged Pointer，保存在常量区，并不在堆区，不通过malloc\free来操作，由系统管理。<br>苹果在64位程序中引入了Tagged Pointer技术，优化了内存占用空间，提高了存取效率。Tagged Pointer，可以理解为“伪”指针，它的指针即表示<code>地址</code>又表示<code>值</code>，其实就是披着对象外皮的普通变量。试想一下，64位程序，一个指针也是64位，用其中的几位来保存一些小的数值对象，是完全可以的，具体有NSString、NSDate、NSNumber等一些小值对象。更多Tagged Pointer相关内容可以<a target="_blank" rel="noopener" href="https://juejin.cn/post/6844904132940136462">参考这篇文章</a>。</p>
+<h1 id="NSProxy"><a href="#NSProxy" class="headerlink" title="NSProxy"></a>NSProxy</h1><p>NSProxy，也是比较特殊，是跟NSObject平级的虚基类。它遵守NSObject协议，但是没有init方法。查看NSProxy的定义，跟NSObject类似，同样有isa：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs objective-c">NS_ROOT_CLASS<br>@interface NSProxy &lt;NSObject&gt; &#123;<br>    __ptrauth_objc_isa_pointer Class	isa;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>断点调试alloc方法，跟NSObject一样，同样是始于<code>objc_alloc</code>方法，中间流程略有区别，但最后都会走到<code>_class_createInstanceFromZone</code>方法。</p>
+<h1 id="NSObject"><a href="#NSObject" class="headerlink" title="NSObject"></a>NSObject</h1><h2 id="alloc流程"><a href="#alloc流程" class="headerlink" title="alloc流程"></a>alloc流程</h2><p>断点<code>[NSObject alloc]</code>代码，发现后续会调用<code>objc_alloc</code>方法，如图：<br><img src="/assets/2021-05-19/0.png"></p>
+<h3 id="1-objc-alloc"><a href="#1-objc-alloc" class="headerlink" title="1. objc_alloc"></a>1. objc_alloc</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c++">id <br><span class="hljs-built_in">objc_alloc</span>(Class cls)<br>&#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">callAlloc</span>(cls, <span class="hljs-literal">true</span><span class="hljs-comment">/*checkNil*/</span>, <span class="hljs-literal">false</span><span class="hljs-comment">/*allocWithZone*/</span>);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="2-callAlloc"><a href="#2-callAlloc" class="headerlink" title="2. callAlloc"></a>2. callAlloc</h3><p>会走<code>_objc_rootAllocWithZone</code></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">static</span> ALWAYS_INLINE id<br><span class="hljs-built_in">callAlloc</span>(Class cls, <span class="hljs-keyword">bool</span> checkNil, <span class="hljs-keyword">bool</span> allocWithZone=<span class="hljs-literal">false</span>)<br>&#123;<br><span class="hljs-meta">#<span class="hljs-meta-keyword">if</span> __OBJC2__</span><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(checkNil &amp;&amp; !cls)) <span class="hljs-keyword">return</span> nil;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">fastpath</span>(!cls-&gt;<span class="hljs-built_in">ISA</span>()-&gt;<span class="hljs-built_in">hasCustomAWZ</span>())) &#123;<br>        <span class="hljs-keyword">return</span> _objc_rootAllocWithZone(cls, nil);<br>    &#125;<br><span class="hljs-meta">#<span class="hljs-meta-keyword">endif</span></span><br><br>    <span class="hljs-comment">// No shortcuts available.</span><br>    <span class="hljs-keyword">if</span> (allocWithZone) &#123;<br>        <span class="hljs-keyword">return</span> ((<span class="hljs-built_in">id</span>(*)(id, SEL, struct _NSZone *))objc_msgSend)(cls, @<span class="hljs-built_in">selector</span>(allocWithZone:), nil);<br>    &#125;<br>    <span class="hljs-keyword">return</span> ((<span class="hljs-built_in">id</span>(*)(id, SEL))objc_msgSend)(cls, @<span class="hljs-built_in">selector</span>(alloc));<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="3-objc-rootAllocWithZone"><a href="#3-objc-rootAllocWithZone" class="headerlink" title="3. _objc_rootAllocWithZone"></a>3. _objc_rootAllocWithZone</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c++">id<br>_objc_rootAllocWithZone(Class cls, <span class="hljs-keyword">malloc_zone_t</span> *zone __unused)<br>&#123;<br>    <span class="hljs-comment">// allocWithZone under __OBJC2__ ignores the zone parameter</span><br>    <span class="hljs-keyword">return</span> _class_createInstanceFromZone(cls, <span class="hljs-number">0</span>, nil,<br>                                         OBJECT_CONSTRUCT_CALL_BADALLOC);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="4-class-createInstanceFromZone"><a href="#4-class-createInstanceFromZone" class="headerlink" title="4. _class_createInstanceFromZone"></a>4. _class_createInstanceFromZone</h3><p>分配内存空间（16字节对齐），绑定isa，返回对象</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">static</span> ALWAYS_INLINE id<br>_class_createInstanceFromZone(Class cls, <span class="hljs-keyword">size_t</span> extraBytes, <span class="hljs-keyword">void</span> *zone,<br>                              <span class="hljs-keyword">int</span> construct_flags = OBJECT_CONSTRUCT_NONE,<br>                              <span class="hljs-keyword">bool</span> cxxConstruct = <span class="hljs-literal">true</span>,<br>                              <span class="hljs-keyword">size_t</span> *outAllocatedSize = nil)<br>&#123;<br>    <span class="hljs-built_in">ASSERT</span>(cls-&gt;<span class="hljs-built_in">isRealized</span>());<br><br>    <span class="hljs-comment">// Read class&#x27;s info bits all at once for performance</span><br>    <span class="hljs-keyword">bool</span> hasCxxCtor = cxxConstruct &amp;&amp; cls-&gt;<span class="hljs-built_in">hasCxxCtor</span>();<br>    <span class="hljs-keyword">bool</span> hasCxxDtor = cls-&gt;<span class="hljs-built_in">hasCxxDtor</span>();<br>    <span class="hljs-keyword">bool</span> fast = cls-&gt;<span class="hljs-built_in">canAllocNonpointer</span>();<br>    <span class="hljs-keyword">size_t</span> size;<br><br>    size = cls-&gt;<span class="hljs-built_in">instanceSize</span>(extraBytes);<br>    <span class="hljs-keyword">if</span> (outAllocatedSize) *outAllocatedSize = size;<br><br>    id obj;<br>    <span class="hljs-keyword">if</span> (zone) &#123;<br>        obj = (id)<span class="hljs-built_in">malloc_zone_calloc</span>((<span class="hljs-keyword">malloc_zone_t</span> *)zone, <span class="hljs-number">1</span>, size);<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        obj = (id)<span class="hljs-built_in">calloc</span>(<span class="hljs-number">1</span>, size);<br>    &#125;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!obj)) &#123;<br>        <span class="hljs-keyword">if</span> (construct_flags &amp; OBJECT_CONSTRUCT_CALL_BADALLOC) &#123;<br>            <span class="hljs-keyword">return</span> _objc_callBadAllocHandler(cls);<br>        &#125;<br>        <span class="hljs-keyword">return</span> nil;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (!zone &amp;&amp; fast) &#123;<br>        obj-&gt;<span class="hljs-built_in">initInstanceIsa</span>(cls, hasCxxDtor);<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// Use raw pointer isa on the assumption that they might be</span><br>        <span class="hljs-comment">// doing something weird with the zone or RR.</span><br>        obj-&gt;<span class="hljs-built_in">initIsa</span>(cls);<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">fastpath</span>(!hasCxxCtor)) &#123;<br>        <span class="hljs-keyword">return</span> obj;<br>    &#125;<br><br>    construct_flags |= OBJECT_CONSTRUCT_FREE_ONFAILURE;<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">object_cxxConstructFromClass</span>(obj, cls, construct_flags);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="init流程"><a href="#init流程" class="headerlink" title="init流程"></a>init流程</h2><p>实际上init就是一个构造方法，把创建的对象返回，查看init源码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs c++">- (id)init &#123;<br>    <span class="hljs-keyword">return</span> _objc_rootInit(self);<br>&#125;<br><br>id <br>_objc_rootInit(id obj)<br>&#123;<br>    <span class="hljs-comment">// In practice, it will be hard to rely on this function.</span><br>    <span class="hljs-comment">// Many classes do not properly chain -init calls.</span><br>    <span class="hljs-keyword">return</span> obj;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h1 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h1><blockquote>
+<p><strong>NSObject</strong>，[NSObject alloc]和[[NSObject alloc] init]开始的流程略有不同，<code>[[NSObject alloc] init]</code>首先走<code>objc_alloc_init</code>方法，然后再走<code>callAlloc</code>流程，最后直接调用<code>_objc_rootInit</code>方法。</p>
+</blockquote>
+<blockquote>
+<p><strong>继承自NSObject的子类对象</strong>，callAlloc会调用两次，一次发送alloc消息，第二次会走<code>_objc_rootAllocWithZone</code>流程。</p>
+</blockquote>
+<blockquote>
+<p><strong>NSProxy</strong>，callAlloc会调用两次，一次发送alloc消息，第二次会发送<code>allocWithZone:</code>消息，然后走<code>_objc_rootAllocWithZone</code>流程。</p>
+</blockquote>
+<p>最后，以一张流程图结束：</p>
+<p><img src="/assets/2021-05-19/1.png"></p>
+</section>
+    <!-- Tags START -->
+    
+    <!-- Tags END -->
+    <!-- NAV START -->
+    
+  <div class="nav-container">
+    <!-- reverse left and right to put prev and next in a more logic postition -->
+    
+      <a class="nav-left" href="/2021/04/30/Hexo-GitHub-Actions%E6%90%AD%E5%BB%BA%E6%97%A5%E8%AE%B0/">
+        <span class="nav-arrow">← </span>
+        
+          Hexo + GitHub Actions搭建日记
+        
+      </a>
+    
+    
+      <a class="nav-right" href="/2021/05/29/Objective-C-Runtime-%E4%BA%8C-%E9%87%8A%E6%94%BE%E5%AF%B9%E8%B1%A1/">
+        
+          Objective-C Runtime(二) : 释放对象
+        
+        <span class="nav-arrow"> →</span>
+      </a>
+    
+  </div>
+
+    <!-- NAV END -->
+    <!-- 打赏 START -->
+    
+      <div class="money-like">
+        <div class="reward-btn">
+          赏
+          <span class="money-code">
+            <span class="alipay-code">
+              <div class="code-image"></div>
+              <b>使用支付宝打赏</b>
+            </span>
+            <span class="wechat-code">
+              <div class="code-image"></div>
+              <b>使用微信打赏</b>
+            </span>
+          </span>
+        </div>
+        <p class="notice">若你觉得我的文章对你有帮助，欢迎点击上方按钮对我打赏</p>
+      </div>
+    
+    <!-- 打赏 END -->
+    <!-- 二维码 START -->
+    
+    <!-- 二维码 END -->
+    
+      <!-- No Comment -->
+    
+  </article>
+  <!-- Article END -->
+  <!-- Catalog START -->
+  
+    <aside class="catalog-container">
+  <div class="toc-main">
+    <strong class="toc-title">Catalog</strong>
+    
+      <ol class="toc-nav"><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#Tagged-Pointer"><span class="toc-nav-text">Tagged Pointer</span></a></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#NSProxy"><span class="toc-nav-text">NSProxy</span></a></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#NSObject"><span class="toc-nav-text">NSObject</span></a><ol class="toc-nav-child"><li class="toc-nav-item toc-nav-level-2"><a class="toc-nav-link" href="#alloc%E6%B5%81%E7%A8%8B"><span class="toc-nav-text">alloc流程</span></a><ol class="toc-nav-child"><li class="toc-nav-item toc-nav-level-3"><a class="toc-nav-link" href="#1-objc-alloc"><span class="toc-nav-text">1. objc_alloc</span></a></li><li class="toc-nav-item toc-nav-level-3"><a class="toc-nav-link" href="#2-callAlloc"><span class="toc-nav-text">2. callAlloc</span></a></li><li class="toc-nav-item toc-nav-level-3"><a class="toc-nav-link" href="#3-objc-rootAllocWithZone"><span class="toc-nav-text">3. _objc_rootAllocWithZone</span></a></li><li class="toc-nav-item toc-nav-level-3"><a class="toc-nav-link" href="#4-class-createInstanceFromZone"><span class="toc-nav-text">4. _class_createInstanceFromZone</span></a></li></ol></li><li class="toc-nav-item toc-nav-level-2"><a class="toc-nav-link" href="#init%E6%B5%81%E7%A8%8B"><span class="toc-nav-text">init流程</span></a></li></ol></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#%E6%B3%A8%E6%84%8F"><span class="toc-nav-text">注意</span></a></li></ol>
+    
+  </div>
+</aside>
+  
+  <!-- Catalog END -->
+</main>
+
+<script>
+  (function () {
+    var url = 'http://example.com/2021/05/19/Objective-C-Runtime-一-创建对象/';
+    var banner = ''
+    if (banner !== '' && banner !== 'undefined' && banner !== 'null') {
+      $('#article-banner').css({
+        'background-image': 'url(' + banner + ')'
+      })
+    } else {
+      $('#article-banner').geopattern(url)
+    }
+    $('.header').removeClass('fixed-header')
+
+    // error image
+    $(".markdown-content img").on('error', function() {
+      $(this).attr('src', 'http://file.muyutech.com/error-img.png')
+      $(this).css({
+        'cursor': 'default'
+      })
+    })
+
+    // zoom image
+    $(".markdown-content img").on('click', function() {
+      var src = $(this).attr('src')
+      if (src !== 'http://file.muyutech.com/error-img.png') {
+        var imageW = $(this).width()
+        var imageH = $(this).height()
+
+        var zoom = ($(window).width() * 0.95 / imageW).toFixed(2)
+        zoom = zoom < 1 ? 1 : zoom
+        zoom = zoom > 2 ? 2 : zoom
+        var transY = (($(window).height() - imageH) / 2).toFixed(2)
+
+        $('body').append('<div class="image-view-wrap"><div class="image-view-inner"><img src="'+ src +'" /></div></div>')
+        $('.image-view-wrap').addClass('wrap-active')
+        $('.image-view-wrap img').css({
+          'width': `${imageW}`,
+          'transform': `translate3d(0, ${transY}px, 0) scale3d(${zoom}, ${zoom}, 1)`
+        })
+        $('html').css('overflow', 'hidden')
+
+        $('.image-view-wrap').on('click', function() {
+          $(this).remove()
+          $('html').attr('style', '')
+        })
+      }
+    })
+  })();
+</script>
+
+
+
+
+
+
+
+    <div class="scroll-top">
+  <span class="arrow-icon"></span>
+</div>
+    <footer class="app-footer">
+  <p class="copyright">
+    &copy; 2021 <a href="https://github.com/ysunwill" target="_blank">ysunwill</a> | Powered by <a href="https://hexo.io" target="_blank">Hexo</a>
+  </p>
+</footer>
+
+<script>
+  function async(u, c) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+</script>
+<script>
+  async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+    FastClick.attach(document.body);
+  })
+</script>
+
+<script>
+  var hasLine = 'true';
+  async("//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js", function(){
+    $('figure pre').each(function(i, block) {
+      var figure = $(this).parents('figure');
+      if (hasLine === 'false') {
+        figure.find('.gutter').hide();
+      }
+      hljs.configure({useBR: true});
+      var lang = figure.attr('class').split(' ')[1] || 'code';
+      var codeHtml = $(this).html();
+      var codeTag = document.createElement('code');
+      codeTag.className = lang;
+      codeTag.innerHTML = codeHtml;
+      $(this).attr('class', '').empty().html(codeTag);
+      figure.attr('data-lang', lang.toUpperCase());
+      hljs.highlightBlock(block);
+    });
+  })
+</script>
+<!-- Baidu Tongji -->
+
+<script>
+    var _baId = 'bba77686b8c4943e7dcfb73c55f025a9';
+    // Originial
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?" + _baId;
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+
+
+<script src="/js/script.js"></script>
+
+  </body>
+</html>

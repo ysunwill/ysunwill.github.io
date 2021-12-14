@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
+  <meta name="description" content="ysunwill&#39;s blog">
+  <meta name="keyword" content="">
+  
+    <link rel="shortcut icon" href="/css/images/logo.png">
+  
+  <title>
+    
+      iOS应用启动流程分析 | ysunwill
+    
+  </title>
+  <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/tomorrow.min.css" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/geopattern/1.2.3/js/geopattern.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+  
+  
+  
+  
+    <!-- MathJax support START -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      });
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      });
+    </script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <!-- MathJax support END -->
+  
+
+
+  
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K5EQ3R1VEC"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-K5EQ3R1VEC');
+    </script>
+
+<meta name="generator" content="Hexo 5.4.0"></head>
+<div class="wechat-share">
+  <img src="/css/images/logo.png" />
+</div>
+
+  <body>
+    <header class="header fixed-header">
+  <div class="header-container">
+    <a class="home-link" href="/">
+      <div class="logo"></div>
+      <span>ysunwill</span>
+    </a>
+    <ul class="right-list">
+      
+        <li class="list-item">
+          
+            <a href="/" class="item-link">Home</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a href="/archives/" class="item-link">Archives</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="item-link">GitHub</a>
+          
+        </li>
+      
+    </ul>
+    <div class="menu">
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </div>
+    <div class="menu-mask">
+      <ul class="menu-list">
+        
+          <li class="menu-item">
+            
+              <a href="/" class="menu-link">Home</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a href="/archives/" class="menu-link">Archives</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="menu-link">GitHub</a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</header>
+
+    <div id="article-banner">
+  <h2>iOS应用启动流程分析</h2>
+  <p class="post-date">2021-08-24</p>
+  <div class="arrow-down">
+    <a href="javascript:;"></a>
+  </div>
+</div>
+<main class="app-body flex-box">
+  <!-- Article START -->
+  <article class="post-article">
+    <section class="markdown-content"><p>app从冷启动开始到第一帧画面渲染完成，经过了很多的过程，以下主要分析pre-main阶段，也就是main函数调用之前的阶段。用户点击app后，内核会加载解析Mach-O文件，然后交给dyld继续加载，最后会来到main函数。</p>
+<h1 id="XNU加载dyld流程"><a href="#XNU加载dyld流程" class="headerlink" title="XNU加载dyld流程"></a>XNU加载dyld流程</h1><p><code>dyld</code>(the dynamic link editor)，系统动态链接器，它本身是如何被系统内核加载的呢？分析<a target="_blank" rel="noopener" href="https://opensource.apple.com/tarballs/xnu/">XNU源码</a>发现，主要是以下过程：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">execve</span><span class="hljs-params">(<span class="hljs-keyword">proc_t</span> p, struct execve_args *uap, <span class="hljs-keyword">int32_t</span> *retval)</span></span><br><span class="hljs-function"></span>&#123;<br>  ...<br>  <span class="hljs-keyword">int</span> err;<br>  ...<br>  err = __mac_execve(p, &amp;muap, retval);<br>  <br>  <span class="hljs-keyword">return</span>(err);<br>&#125;<br><br><span class="hljs-keyword">int</span> __mac_execve(<span class="hljs-keyword">proc_t</span> p, ...) <br>&#123;<br>    <span class="hljs-keyword">int</span> error;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">uthread</span>  *<span class="hljs-title">uthread</span>;</span><br>    <span class="hljs-keyword">task_t</span> old_task = <span class="hljs-built_in">current_task</span>();<br>    <span class="hljs-keyword">task_t</span> new_task = <span class="hljs-literal">NULL</span>;<br>    ...<br>	<br>    <span class="hljs-comment">// 分配大块内存，因为Mach-O的结构比较大</span><br>    <span class="hljs-built_in">MALLOC</span>(bufp, <span class="hljs-keyword">char</span> *, (<span class="hljs-built_in"><span class="hljs-keyword">sizeof</span></span>(*imgp) + <span class="hljs-built_in"><span class="hljs-keyword">sizeof</span></span>(*vap) + <span class="hljs-built_in"><span class="hljs-keyword">sizeof</span></span>(*origvap)),  M_TEMP, M_WAITOK | M_ZERO);<br>    imgp = (struct image_params *) bufp;<br>    ...<br><br>    <span class="hljs-comment">// 初始化imgp结构里的公共数据</span><br>    imgp-&gt;ip_user_fname = uap-&gt;fname;<br>    imgp-&gt;ip_user_argv = uap-&gt;argp;<br>    imgp-&gt;ip_user_envv = uap-&gt;envp;<br>    ...<br><br>    uthread = <span class="hljs-built_in">get_bsdthread_info</span>(<span class="hljs-built_in">current_thread</span>());<br>    <span class="hljs-keyword">if</span> (uthread-&gt;uu_flag &amp; UT_VFORK) &#123;<br>      imgp-&gt;ip_flags |= IMGPF_VFORK_EXEC;<br>      in_vfexec = TRUE;<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>      <span class="hljs-comment">// fork新进程</span><br>      imgp-&gt;ip_flags |= IMGPF_EXEC;<br>      imgp-&gt;ip_new_thread = fork_create_child(old_task,<br>          <span class="hljs-literal">NULL</span>,<br>          p,<br>          FALSE,<br>          p-&gt;p_flag &amp; P_LP64,<br>          <span class="hljs-built_in">task_get_64bit_data</span>(old_task),<br>          TRUE);<br><br>      new_task = <span class="hljs-built_in">get_threadtask</span>(imgp-&gt;ip_new_thread);<br>      context.vc_thread = imgp-&gt;ip_new_thread;<br>    &#125;<br><br>    <span class="hljs-comment">// 加载解析Mach-O</span><br>    error = <span class="hljs-built_in">exec_activate_image</span>(imgp);<br>    ...<br>    <span class="hljs-keyword">if</span> (!error) &#123;<br>      <span class="hljs-comment">// 设置主线程</span><br>      <span class="hljs-keyword">thread_t</span> main_thread = imgp-&gt;ip_new_thread;<br>      <span class="hljs-built_in">task_set_main_thread_qos</span>(new_task, main_thread);<br>      ...<br>    &#125;<br>    ...<br>    <br>    <span class="hljs-keyword">return</span> error;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>其中，加载解析Mach-O文件的主要代码如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> <span class="hljs-title">exec_activate_image</span><span class="hljs-params">(struct image_params *imgp)</span></span><br><span class="hljs-function"></span>&#123;<br>    ...<br>    <span class="hljs-comment">// 根据不同的Mach-O格式调用对应的加载函数，比如胖二进制等</span><br>    <span class="hljs-keyword">for</span>(i = <span class="hljs-number">0</span>; error == <span class="hljs-number">-1</span> &amp;&amp; execsw[i].ex_imgact != <span class="hljs-literal">NULL</span>; i++) &#123;<br>    		error = (*execsw[i].ex_imgact)(imgp);<br>        ...<br>    &#125;<br>    ...<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> <span class="hljs-title">exec_mach_imgact</span><span class="hljs-params">(struct image_params *imgp)</span></span><br><span class="hljs-function"></span>&#123;<br>    ...<br>    <span class="hljs-comment">// 加载解析Mach-O文件</span><br>    lret = <span class="hljs-built_in">load_machfile</span>(imgp, mach_header, thread, &amp;map, &amp;load_result);<br>    ...<br>    <span class="hljs-comment">// 设置entry_point</span><br>    lret = <span class="hljs-built_in">activate_exec_state</span>(task, p, thread, &amp;load_result);<br>&#125;<br><br><br><span class="hljs-function"><span class="hljs-keyword">load_return_t</span> <span class="hljs-title">load_machfile</span><span class="hljs-params">(struct image_params *imgp, ...)</span></span><br><span class="hljs-function"></span>&#123;<br>    ...<br>    <span class="hljs-comment">// 解析Mach-O文件，包括解析load command等信息</span><br>    lret = <span class="hljs-built_in">parse_machfile</span>(vp, map, thread, header, ..., imgp);<br>    ...<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> <span class="hljs-title">activate_exec_state</span><span class="hljs-params">(<span class="hljs-keyword">task_t</span> task, ...)</span></span><br><span class="hljs-function"></span>&#123;<br>    ...<br>     <span class="hljs-comment">// 设置entry_point，也就是dyld的入口，__dyld_start</span><br>    <span class="hljs-built_in">thread_setentrypoint</span>(thread, result-&gt;entry_point);<br>    ...<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>总结一下此阶段的流程</code>：</p>
+<ul>
+<li>fork一条新进程</li>
+<li>为解析Mach-O文件分配大块内存<ul>
+<li>加载Mach-O</li>
+<li>解析Mach-O</li>
+<li>设置entry_point，启动dyld</li>
+</ul>
+</li>
+<li>设置进程的主线程</li>
+</ul>
+<h1 id="dyld加载应用流程"><a href="#dyld加载应用流程" class="headerlink" title="dyld加载应用流程"></a>dyld加载应用流程</h1><p>来到<code>__dyld_start</code>后，这时候就要分析<a target="_blank" rel="noopener" href="https://opensource.apple.com/tarballs/dyld/">dyld源码</a>，会发现dyldStartup.s这个汇编文件中会调用<code>dyldbootstrap::start(app_mh, argc, argv, dyld_mh, &amp;startGlue)</code>这个函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-function"><span class="hljs-keyword">uintptr_t</span> <span class="hljs-title">start</span><span class="hljs-params">(<span class="hljs-keyword">const</span> dyld3::MachOLoaded* appsMachHeader, ...)</span></span><br><span class="hljs-function"></span>&#123;<br>    ...<br>    <span class="hljs-keyword">return</span> dyld::_main((macho_header*)appsMachHeader, appsSlide, argc, argv, envp, apple, startGlue);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>最终，会调用<code>dyld::_main(...)</code>函数</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">uintptr_t</span> _main(<span class="hljs-keyword">const</span> macho_header* mainExecutableMH, ...)<br>&#123;<br>    <span class="hljs-comment">// 环境变量等检查操作</span><br>    ...<br>		<br>    <span class="hljs-comment">// 检查并加载共享缓存库，例如UIKit、CoreFoundation等</span><br>    <span class="hljs-built_in">checkSharedRegionDisable</span>((dyld3::MachOLoaded*)mainExecutableMH, 	        mainExecutableSlide);<br>    <span class="hljs-keyword">if</span> (gLinkContext.sharedRegionMode !=  ImageLoader::kDontUseSharedRegion) &#123;<br>    ...<br>    <span class="hljs-built_in">mapSharedCache</span>(mainExecutableSlide);<br>    ...<br>    &#125;<br>    ...<br><br>    <span class="hljs-comment">// 初始化主程序</span><br>    <span class="hljs-comment">// 创建镜像加载器ImageLoader</span><br>    sMainExecutable = <span class="hljs-built_in">instantiateFromLoadedImage</span>(mainExecutableMH, mainExecutableSlide, sExecPath);<br>    ...<br><br>    <span class="hljs-comment">// 插入动态库</span><br>    <span class="hljs-keyword">if</span>	( sEnv.DYLD_INSERT_LIBRARIES != <span class="hljs-literal">NULL</span> ) &#123;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* <span class="hljs-keyword">const</span>* lib = sEnv.DYLD_INSERT_LIBRARIES; *lib != <span class="hljs-literal">NULL</span>; ++lib) <br>        <span class="hljs-built_in">loadInsertedDylib</span>(*lib);<br>    &#125;<br>    ...<br><br>    <span class="hljs-comment">// 链接主程序</span><br>    gLinkContext.linkingMainExecutable = <span class="hljs-literal">true</span>;<br>    ...<br><br>    <span class="hljs-comment">// 链接动态库</span><br>    <span class="hljs-keyword">if</span> ( sInsertedDylibCount &gt; <span class="hljs-number">0</span> ) &#123;<br>        <span class="hljs-keyword">for</span>(<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> i=<span class="hljs-number">0</span>; i &lt; sInsertedDylibCount; ++i) &#123;<br>        ImageLoader* image = sAllImages[i+<span class="hljs-number">1</span>];<br>        <span class="hljs-built_in">link</span>(image, sEnv.DYLD_BIND_AT_LAUNCH, <span class="hljs-literal">true</span>, ImageLoader::<span class="hljs-built_in">RPathChain</span>(<span class="hljs-literal">NULL</span>, <span class="hljs-literal">NULL</span>), <span class="hljs-number">-1</span>);<br>        image-&gt;<span class="hljs-built_in">setNeverUnloadRecursive</span>();<br>      &#125;<br>      ...<br>    &#125;<br>    ...<br><br>    <span class="hljs-comment">// 执行初始化</span><br>    <span class="hljs-comment">// 主程序以及其它相关模块</span><br>    <span class="hljs-comment">// OC运行时初始化、类的+(load)等都是此流程的子流程中完成的</span><br>    <span class="hljs-built_in">initializeMainExecutable</span>(); <br>    ...<br><br>    <span class="hljs-comment">// 寻找主程序入口，即main()函数入口</span><br>    result = (<span class="hljs-keyword">uintptr_t</span>)sMainExecutable-&gt;<span class="hljs-built_in">getEntryFromLC_MAIN</span>();<br>    ...<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>总结下此阶段流程</code>:</p>
+<ul>
+<li>检查环境变量等操作</li>
+<li>检查并加载共享缓存库</li>
+<li>初始化主程序</li>
+<li>插入动态库</li>
+<li>链接主程序</li>
+<li>链接动态库</li>
+<li>执行初始化</li>
+<li>寻找主程序入口</li>
+</ul>
+<p>总之，启动过程路漫漫，远比写出来的要复杂。</p>
+</section>
+    <!-- Tags START -->
+    
+    <!-- Tags END -->
+    <!-- NAV START -->
+    
+  <div class="nav-container">
+    <!-- reverse left and right to put prev and next in a more logic postition -->
+    
+      <a class="nav-left" href="/2021/05/29/Objective-C-Runtime-%E4%BA%8C-%E9%87%8A%E6%94%BE%E5%AF%B9%E8%B1%A1/">
+        <span class="nav-arrow">← </span>
+        
+          Objective-C Runtime(二) : 释放对象
+        
+      </a>
+    
+    
+      <a class="nav-right" href="/2021/09/18/%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90Objective-C-Block/">
+        
+          汇编分析Objective-C Block
+        
+        <span class="nav-arrow"> →</span>
+      </a>
+    
+  </div>
+
+    <!-- NAV END -->
+    <!-- 打赏 START -->
+    
+      <div class="money-like">
+        <div class="reward-btn">
+          赏
+          <span class="money-code">
+            <span class="alipay-code">
+              <div class="code-image"></div>
+              <b>使用支付宝打赏</b>
+            </span>
+            <span class="wechat-code">
+              <div class="code-image"></div>
+              <b>使用微信打赏</b>
+            </span>
+          </span>
+        </div>
+        <p class="notice">若你觉得我的文章对你有帮助，欢迎点击上方按钮对我打赏</p>
+      </div>
+    
+    <!-- 打赏 END -->
+    <!-- 二维码 START -->
+    
+    <!-- 二维码 END -->
+    
+      <!-- No Comment -->
+    
+  </article>
+  <!-- Article END -->
+  <!-- Catalog START -->
+  
+    <aside class="catalog-container">
+  <div class="toc-main">
+    <strong class="toc-title">Catalog</strong>
+    
+      <ol class="toc-nav"><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#XNU%E5%8A%A0%E8%BD%BDdyld%E6%B5%81%E7%A8%8B"><span class="toc-nav-text">XNU加载dyld流程</span></a></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#dyld%E5%8A%A0%E8%BD%BD%E5%BA%94%E7%94%A8%E6%B5%81%E7%A8%8B"><span class="toc-nav-text">dyld加载应用流程</span></a></li></ol>
+    
+  </div>
+</aside>
+  
+  <!-- Catalog END -->
+</main>
+
+<script>
+  (function () {
+    var url = 'http://example.com/2021/08/24/iOS应用启动流程分析/';
+    var banner = ''
+    if (banner !== '' && banner !== 'undefined' && banner !== 'null') {
+      $('#article-banner').css({
+        'background-image': 'url(' + banner + ')'
+      })
+    } else {
+      $('#article-banner').geopattern(url)
+    }
+    $('.header').removeClass('fixed-header')
+
+    // error image
+    $(".markdown-content img").on('error', function() {
+      $(this).attr('src', 'http://file.muyutech.com/error-img.png')
+      $(this).css({
+        'cursor': 'default'
+      })
+    })
+
+    // zoom image
+    $(".markdown-content img").on('click', function() {
+      var src = $(this).attr('src')
+      if (src !== 'http://file.muyutech.com/error-img.png') {
+        var imageW = $(this).width()
+        var imageH = $(this).height()
+
+        var zoom = ($(window).width() * 0.95 / imageW).toFixed(2)
+        zoom = zoom < 1 ? 1 : zoom
+        zoom = zoom > 2 ? 2 : zoom
+        var transY = (($(window).height() - imageH) / 2).toFixed(2)
+
+        $('body').append('<div class="image-view-wrap"><div class="image-view-inner"><img src="'+ src +'" /></div></div>')
+        $('.image-view-wrap').addClass('wrap-active')
+        $('.image-view-wrap img').css({
+          'width': `${imageW}`,
+          'transform': `translate3d(0, ${transY}px, 0) scale3d(${zoom}, ${zoom}, 1)`
+        })
+        $('html').css('overflow', 'hidden')
+
+        $('.image-view-wrap').on('click', function() {
+          $(this).remove()
+          $('html').attr('style', '')
+        })
+      }
+    })
+  })();
+</script>
+
+
+
+
+
+
+
+    <div class="scroll-top">
+  <span class="arrow-icon"></span>
+</div>
+    <footer class="app-footer">
+  <p class="copyright">
+    &copy; 2021 <a href="https://github.com/ysunwill" target="_blank">ysunwill</a> | Powered by <a href="https://hexo.io" target="_blank">Hexo</a>
+  </p>
+</footer>
+
+<script>
+  function async(u, c) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+</script>
+<script>
+  async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+    FastClick.attach(document.body);
+  })
+</script>
+
+<script>
+  var hasLine = 'true';
+  async("//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js", function(){
+    $('figure pre').each(function(i, block) {
+      var figure = $(this).parents('figure');
+      if (hasLine === 'false') {
+        figure.find('.gutter').hide();
+      }
+      hljs.configure({useBR: true});
+      var lang = figure.attr('class').split(' ')[1] || 'code';
+      var codeHtml = $(this).html();
+      var codeTag = document.createElement('code');
+      codeTag.className = lang;
+      codeTag.innerHTML = codeHtml;
+      $(this).attr('class', '').empty().html(codeTag);
+      figure.attr('data-lang', lang.toUpperCase());
+      hljs.highlightBlock(block);
+    });
+  })
+</script>
+<!-- Baidu Tongji -->
+
+<script>
+    var _baId = 'bba77686b8c4943e7dcfb73c55f025a9';
+    // Originial
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?" + _baId;
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+
+
+<script src="/js/script.js"></script>
+
+  </body>
+</html>

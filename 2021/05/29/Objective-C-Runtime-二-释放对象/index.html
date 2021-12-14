@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
+  <meta name="description" content="ysunwill&#39;s blog">
+  <meta name="keyword" content="">
+  
+    <link rel="shortcut icon" href="/css/images/logo.png">
+  
+  <title>
+    
+      Objective-C Runtime(二) : 释放对象 | ysunwill
+    
+  </title>
+  <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/tomorrow.min.css" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/geopattern/1.2.3/js/geopattern.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+  
+  
+  
+  
+    <!-- MathJax support START -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      });
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      });
+    </script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <!-- MathJax support END -->
+  
+
+
+  
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K5EQ3R1VEC"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-K5EQ3R1VEC');
+    </script>
+
+<meta name="generator" content="Hexo 5.4.0"></head>
+<div class="wechat-share">
+  <img src="/css/images/logo.png" />
+</div>
+
+  <body>
+    <header class="header fixed-header">
+  <div class="header-container">
+    <a class="home-link" href="/">
+      <div class="logo"></div>
+      <span>ysunwill</span>
+    </a>
+    <ul class="right-list">
+      
+        <li class="list-item">
+          
+            <a href="/" class="item-link">Home</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a href="/archives/" class="item-link">Archives</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="item-link">GitHub</a>
+          
+        </li>
+      
+    </ul>
+    <div class="menu">
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </div>
+    <div class="menu-mask">
+      <ul class="menu-list">
+        
+          <li class="menu-item">
+            
+              <a href="/" class="menu-link">Home</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a href="/archives/" class="menu-link">Archives</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="menu-link">GitHub</a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</header>
+
+    <div id="article-banner">
+  <h2>Objective-C Runtime(二) : 释放对象</h2>
+  <p class="post-date">2021-05-29</p>
+  <div class="arrow-down">
+    <a href="javascript:;"></a>
+  </div>
+</div>
+<main class="app-body flex-box">
+  <!-- Article START -->
+  <article class="post-article">
+    <section class="markdown-content"><p>上回说到创建对象，这回来说下释放对象。在iOS中，使用<code>引用计数</code>来管理对象内存。iOS5之前，使用手动引用计数MRC(Manual Reference Counting)来管理内存，后面又推出了使用更广泛的自动引用计数ARC(Automatic Reference Counting)。MRC需要手动调用retain、release等，ARC则不需要手动调用，编译器帮我们做了。</p>
+<blockquote>
+<p>简而言之，持有对象(retain)引用计数+1，释放(release)引用计数-1，当引用计数变成0，那么这个对象会被系统回收(dealloc)，释放占用的内存空间。</p>
+<p>下面重点分析<code>retain</code> 、<code>release</code>、 <code>dealloc</code>过程。</p>
+</blockquote>
+<h1 id="retain"><a href="#retain" class="headerlink" title="retain"></a>retain</h1><p>直接查看retain的源码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c++">id <br><span class="hljs-built_in">objc_retain</span>(id obj)<br>&#123;<br>    <span class="hljs-keyword">if</span> (obj-&gt;<span class="hljs-built_in">isTaggedPointerOrNil</span>()) <span class="hljs-keyword">return</span> obj;<br>    <span class="hljs-keyword">return</span> obj-&gt;<span class="hljs-built_in">retain</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>会先判断是不是TaggedPointer(由系统管理)或者是空，如果是则直接返回obj，其它对象进入reatain流程：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">inline</span> id <br>objc_object::<span class="hljs-built_in">retain</span>()<br>&#123;<br>    <span class="hljs-built_in">ASSERT</span>(!<span class="hljs-built_in">isTaggedPointer</span>());<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">rootRetain</span>(<span class="hljs-literal">false</span>, RRVariant::FastOrMsgSend);<br>&#125;<br><br>ALWAYS_INLINE id<br>objc_object::<span class="hljs-built_in">rootRetain</span>(<span class="hljs-keyword">bool</span> tryRetain, objc_object::RRVariant variant)<br>&#123;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(<span class="hljs-built_in">isTaggedPointer</span>())) <span class="hljs-keyword">return</span> (id)<span class="hljs-keyword">this</span>;<br><br>    <span class="hljs-keyword">bool</span> sideTableLocked = <span class="hljs-literal">false</span>;<br>    <span class="hljs-keyword">bool</span> transcribeToSideTable = <span class="hljs-literal">false</span>;<br><br>    <span class="hljs-keyword">isa_t</span> oldisa;<br>    <span class="hljs-keyword">isa_t</span> newisa;<br><br>    oldisa = <span class="hljs-built_in">LoadExclusive</span>(&amp;isa.bits);<br><br>    <span class="hljs-keyword">if</span> (variant == RRVariant::FastOrMsgSend) &#123;<br>        <span class="hljs-comment">// These checks are only meaningful for objc_retain()</span><br>        <span class="hljs-comment">// They are here so that we avoid a re-load of the isa.</span><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">hasCustomRR</span>())) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">if</span> (oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">canCallSwiftRR</span>()) &#123;<br>                <span class="hljs-keyword">return</span> swiftRetain.<span class="hljs-built_in">load</span>(memory_order_relaxed)((id)<span class="hljs-keyword">this</span>);<br>            &#125;<br>            <span class="hljs-keyword">return</span> ((<span class="hljs-built_in">id</span>(*)(objc_object *, SEL))objc_msgSend)(<span class="hljs-keyword">this</span>, @<span class="hljs-built_in">selector</span>(retain));<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!oldisa.nonpointer)) &#123;<br>        <span class="hljs-comment">// a Class is a Class forever, so we can perform this check once</span><br>        <span class="hljs-comment">// outside of the CAS loop</span><br>        <span class="hljs-keyword">if</span> (oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">isMetaClass</span>()) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">return</span> (id)<span class="hljs-keyword">this</span>;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">do</span> &#123;<br>        transcribeToSideTable = <span class="hljs-literal">false</span>;<br>        newisa = oldisa;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!newisa.nonpointer)) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">if</span> (tryRetain) <span class="hljs-keyword">return</span> <span class="hljs-built_in">sidetable_tryRetain</span>() ? (id)<span class="hljs-keyword">this</span> : nil;<br>            <span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> <span class="hljs-built_in">sidetable_retain</span>(sideTableLocked);<br>        &#125;<br>        <span class="hljs-comment">// don&#x27;t check newisa.fast_rr; we already called any RR overrides</span><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(newisa.<span class="hljs-built_in">isDeallocating</span>())) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">if</span> (sideTableLocked) &#123;<br>                <span class="hljs-built_in">ASSERT</span>(variant == RRVariant::Full);<br>                <span class="hljs-built_in">sidetable_unlock</span>();<br>            &#125;<br>            <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(tryRetain)) &#123;<br>                <span class="hljs-keyword">return</span> nil;<br>            &#125; <span class="hljs-keyword">else</span> &#123;<br>                <span class="hljs-built_in"><span class="hljs-keyword">return</span></span> (id)<span class="hljs-keyword">this</span>;<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">uintptr_t</span> carry;<br>        newisa.bits = <span class="hljs-built_in">addc</span>(newisa.bits, RC_ONE, <span class="hljs-number">0</span>, &amp;carry);  <span class="hljs-comment">// extra_rc++</span><br><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(carry)) &#123;<br>            <span class="hljs-comment">// newisa.extra_rc++ overflowed</span><br>            <span class="hljs-keyword">if</span> (variant != RRVariant::Full) &#123;<br>                <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>                <span class="hljs-keyword">return</span> <span class="hljs-built_in">rootRetain_overflow</span>(tryRetain);<br>            &#125;<br>            <span class="hljs-comment">// Leave half of the retain counts inline and </span><br>            <span class="hljs-comment">// prepare to copy the other half to the side table.</span><br>            <span class="hljs-keyword">if</span> (!tryRetain &amp;&amp; !sideTableLocked) <span class="hljs-built_in">sidetable_lock</span>();<br>            sideTableLocked = <span class="hljs-literal">true</span>;<br>            transcribeToSideTable = <span class="hljs-literal">true</span>;<br>            newisa.extra_rc = RC_HALF;<br>            newisa.has_sidetable_rc = <span class="hljs-literal">true</span>;<br>        &#125;<br>    &#125; <span class="hljs-keyword">while</span> (<span class="hljs-built_in">slowpath</span>(!<span class="hljs-built_in">StoreExclusive</span>(&amp;isa.bits, &amp;oldisa.bits, newisa.bits)));<br><br>    <span class="hljs-keyword">if</span> (variant == RRVariant::Full) &#123;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(transcribeToSideTable)) &#123;<br>            <span class="hljs-comment">// Copy the other half of the retain counts to the side table.</span><br>            <span class="hljs-built_in">sidetable_addExtraRC_nolock</span>(RC_HALF);<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!tryRetain &amp;&amp; sideTableLocked)) <span class="hljs-built_in">sidetable_unlock</span>();<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">ASSERT</span>(!transcribeToSideTable);<br>        <span class="hljs-built_in">ASSERT</span>(!sideTableLocked);<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> (id)<span class="hljs-keyword">this</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>核心代码逻辑</strong>：</p>
+<ul>
+<li>如果不是nonpointer isa，也就是指针型isa，则直接操作散列表SideTable，引用计数+1</li>
+<li>如果是nonpointer isa，也就是非指针型isa(一般都是这种，针对64位指针优化过的)，isa中的extra_rc+1，也就是引用计数+1</li>
+<li>判断extra_rc满了，则拿出当前引用计数的一半存入extra_rc，并且设置isa的has_sidetable_rc为1(true)</li>
+<li>将剩下的另一半引用计数存入SideTable</li>
+</ul>
+<h1 id="release"><a href="#release" class="headerlink" title="release"></a>release</h1><p>查看release源码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">void</span> <br><span class="hljs-built_in">objc_release</span>(id obj)<br>&#123;<br>    <span class="hljs-keyword">if</span> (obj-&gt;<span class="hljs-built_in">isTaggedPointerOrNil</span>()) <span class="hljs-keyword">return</span>;<br>    <span class="hljs-keyword">return</span> obj-&gt;<span class="hljs-built_in">release</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>跟retain一样，首先判断是不是TaggedPointer(由系统管理)或者是空，如果是则直接返回，其它对象进入release流程：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br></pre></td><td class="code"><pre><code class="hljs c++"><span class="hljs-keyword">inline</span> <span class="hljs-keyword">void</span><br>objc_object::<span class="hljs-built_in">release</span>()<br>&#123;<br>    <span class="hljs-built_in">ASSERT</span>(!<span class="hljs-built_in">isTaggedPointer</span>());<br><br>    <span class="hljs-built_in">rootRelease</span>(<span class="hljs-literal">true</span>, RRVariant::FastOrMsgSend);<br>&#125;<br><br>ALWAYS_INLINE <span class="hljs-keyword">bool</span><br>objc_object::<span class="hljs-built_in">rootRelease</span>(<span class="hljs-keyword">bool</span> performDealloc, objc_object::RRVariant variant)<br>&#123;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(<span class="hljs-built_in">isTaggedPointer</span>())) <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br><br>    <span class="hljs-keyword">bool</span> sideTableLocked = <span class="hljs-literal">false</span>;<br><br>    <span class="hljs-keyword">isa_t</span> newisa, oldisa;<br><br>    oldisa = <span class="hljs-built_in">LoadExclusive</span>(&amp;isa.bits);<br><br>    <span class="hljs-keyword">if</span> (variant == RRVariant::FastOrMsgSend) &#123;<br>        <span class="hljs-comment">// These checks are only meaningful for objc_release()</span><br>        <span class="hljs-comment">// They are here so that we avoid a re-load of the isa.</span><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">hasCustomRR</span>())) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">if</span> (oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">canCallSwiftRR</span>()) &#123;<br>                swiftRelease.<span class="hljs-built_in">load</span>(memory_order_relaxed)((id)<span class="hljs-keyword">this</span>);<br>                <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>            &#125;<br>            ((<span class="hljs-built_in"><span class="hljs-keyword">void</span></span>(*)(objc_object *, SEL))objc_msgSend)(<span class="hljs-keyword">this</span>, @<span class="hljs-built_in">selector</span>(release));<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!oldisa.nonpointer)) &#123;<br>        <span class="hljs-comment">// a Class is a Class forever, so we can perform this check once</span><br>        <span class="hljs-comment">// outside of the CAS loop</span><br>        <span class="hljs-keyword">if</span> (oldisa.<span class="hljs-built_in">getDecodedClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">isMetaClass</span>()) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>        &#125;<br>    &#125;<br><br>retry:<br>    <span class="hljs-keyword">do</span> &#123;<br>        newisa = oldisa;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!newisa.nonpointer)) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">return</span> <span class="hljs-built_in">sidetable_release</span>(sideTableLocked, performDealloc);<br>        &#125;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(newisa.<span class="hljs-built_in">isDeallocating</span>())) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">if</span> (sideTableLocked) &#123;<br>                <span class="hljs-built_in">ASSERT</span>(variant == RRVariant::Full);<br>                <span class="hljs-built_in">sidetable_unlock</span>();<br>            &#125;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// don&#x27;t check newisa.fast_rr; we already called any RR overrides</span><br>        <span class="hljs-keyword">uintptr_t</span> carry;<br>        newisa.bits = <span class="hljs-built_in">subc</span>(newisa.bits, RC_ONE, <span class="hljs-number">0</span>, &amp;carry);  <span class="hljs-comment">// extra_rc--</span><br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(carry)) &#123;<br>            <span class="hljs-comment">// don&#x27;t ClearExclusive()</span><br>            <span class="hljs-keyword">goto</span> underflow;<br>        &#125;<br>    &#125; <span class="hljs-keyword">while</span> (<span class="hljs-built_in">slowpath</span>(!<span class="hljs-built_in">StoreReleaseExclusive</span>(&amp;isa.bits, &amp;oldisa.bits, newisa.bits)));<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(newisa.<span class="hljs-built_in">isDeallocating</span>()))<br>        <span class="hljs-keyword">goto</span> deallocate;<br><br>    <span class="hljs-keyword">if</span> (variant == RRVariant::Full) &#123;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(sideTableLocked)) <span class="hljs-built_in">sidetable_unlock</span>();<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">ASSERT</span>(!sideTableLocked);<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br><br> underflow:<br>    <span class="hljs-comment">// newisa.extra_rc-- underflowed: borrow from side table or deallocate</span><br><br>    <span class="hljs-comment">// abandon newisa to undo the decrement</span><br>    newisa = oldisa;<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(newisa.has_sidetable_rc)) &#123;<br>        <span class="hljs-keyword">if</span> (variant != RRVariant::Full) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">return</span> <span class="hljs-built_in">rootRelease_underflow</span>(performDealloc);<br>        &#125;<br><br>        <span class="hljs-comment">// Transfer retain count from side table to inline storage.</span><br><br>        <span class="hljs-keyword">if</span> (!sideTableLocked) &#123;<br>            <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-built_in">sidetable_lock</span>();<br>            sideTableLocked = <span class="hljs-literal">true</span>;<br>            <span class="hljs-comment">// Need to start over to avoid a race against </span><br>            <span class="hljs-comment">// the nonpointer -&gt; raw pointer transition.</span><br>            oldisa = <span class="hljs-built_in">LoadExclusive</span>(&amp;isa.bits);<br>            <span class="hljs-keyword">goto</span> retry;<br>        &#125;<br><br>        <span class="hljs-comment">// Try to remove some retain counts from the side table.        </span><br>        <span class="hljs-keyword">auto</span> borrow = <span class="hljs-built_in">sidetable_subExtraRC_nolock</span>(RC_HALF);<br><br>        <span class="hljs-keyword">bool</span> emptySideTable = borrow.remaining == <span class="hljs-number">0</span>; <span class="hljs-comment">// we&#x27;ll clear the side table if no refcounts remain there</span><br><br>        <span class="hljs-keyword">if</span> (borrow.borrowed &gt; <span class="hljs-number">0</span>) &#123;<br>            <span class="hljs-comment">// Side table retain count decreased.</span><br>            <span class="hljs-comment">// Try to add them to the inline count.</span><br>            <span class="hljs-keyword">bool</span> didTransitionToDeallocating = <span class="hljs-literal">false</span>;<br>            newisa.extra_rc = borrow.borrowed - <span class="hljs-number">1</span>;  <span class="hljs-comment">// redo the original decrement too</span><br>            newisa.has_sidetable_rc = !emptySideTable;<br><br>            <span class="hljs-keyword">bool</span> stored = <span class="hljs-built_in">StoreReleaseExclusive</span>(&amp;isa.bits, &amp;oldisa.bits, newisa.bits);<br><br>            <span class="hljs-keyword">if</span> (!stored &amp;&amp; oldisa.nonpointer) &#123;<br>                <span class="hljs-comment">// Inline update failed. </span><br>                <span class="hljs-comment">// Try it again right now. This prevents livelock on LL/SC </span><br>                <span class="hljs-comment">// architectures where the side table access itself may have </span><br>                <span class="hljs-comment">// dropped the reservation.</span><br>                <span class="hljs-keyword">uintptr_t</span> overflow;<br>                newisa.bits =<br>                    <span class="hljs-built_in">addc</span>(oldisa.bits, RC_ONE * (borrow.borrowed<span class="hljs-number">-1</span>), <span class="hljs-number">0</span>, &amp;overflow);<br>                newisa.has_sidetable_rc = !emptySideTable;<br>                <span class="hljs-keyword">if</span> (!overflow) &#123;<br>                    stored = <span class="hljs-built_in">StoreReleaseExclusive</span>(&amp;isa.bits, &amp;oldisa.bits, newisa.bits);<br>                    <span class="hljs-keyword">if</span> (stored) &#123;<br>                        didTransitionToDeallocating = newisa.<span class="hljs-built_in">isDeallocating</span>();<br>                    &#125;<br>                &#125;<br>            &#125;<br><br>            <span class="hljs-keyword">if</span> (!stored) &#123;<br>                <span class="hljs-comment">// Inline update failed.</span><br>                <span class="hljs-comment">// Put the retains back in the side table.</span><br>                <span class="hljs-built_in">ClearExclusive</span>(&amp;isa.bits);<br>                <span class="hljs-built_in">sidetable_addExtraRC_nolock</span>(borrow.borrowed);<br>                oldisa = <span class="hljs-built_in">LoadExclusive</span>(&amp;isa.bits);<br>                <span class="hljs-keyword">goto</span> retry;<br>            &#125;<br><br>            <span class="hljs-comment">// Decrement successful after borrowing from side table.</span><br>            <span class="hljs-keyword">if</span> (emptySideTable)<br>                <span class="hljs-built_in">sidetable_clearExtraRC_nolock</span>();<br><br>            <span class="hljs-keyword">if</span> (!didTransitionToDeallocating) &#123;<br>                <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(sideTableLocked)) <span class="hljs-built_in">sidetable_unlock</span>();<br>                <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// Side table is empty after all. Fall-through to the dealloc path.</span><br>        &#125;<br>    &#125;<br><br>deallocate:<br>    <span class="hljs-comment">// Really deallocate.</span><br><br>    <span class="hljs-built_in">ASSERT</span>(newisa.<span class="hljs-built_in">isDeallocating</span>());<br>    <span class="hljs-built_in">ASSERT</span>(isa.<span class="hljs-built_in">isDeallocating</span>());<br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(sideTableLocked)) <span class="hljs-built_in">sidetable_unlock</span>();<br><br>    __c11_atomic_thread_fence(__ATOMIC_ACQUIRE);<br><br>    <span class="hljs-keyword">if</span> (performDealloc) &#123;<br>        ((<span class="hljs-built_in"><span class="hljs-keyword">void</span></span>(*)(objc_object *, SEL))objc_msgSend)(<span class="hljs-keyword">this</span>, @<span class="hljs-built_in">selector</span>(dealloc));<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>核心代码逻辑</strong>：</p>
+<ul>
+<li>如果不是nonpointer isa，则直接操作散列表SideTable，引用计数-1</li>
+<li>如果是nonpointer isa，isa中的extra_rc-1，也就是引用计数-1</li>
+<li>如果extra_rc不为0，则将减完的引用计数存回isa</li>
+<li>如果extra_rc为0，则判断has_sidetable_rc是否为true，如果false，则进入deallocate流程(发送dealloc消息)</li>
+<li>如果has_sidetable_rc为true，则进入underflow流程，取出SideTable中一半的引用计数后-1并存入extra_rc</li>
+</ul>
+<h1 id="dealloc"><a href="#dealloc" class="headerlink" title="dealloc"></a>dealloc</h1><p>查看dealloc源码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs c++">- (<span class="hljs-keyword">void</span>)dealloc &#123;<br>    _objc_rootDealloc(self);<br>&#125;<br><br><span class="hljs-keyword">void</span><br>_objc_rootDealloc(id obj)<br>&#123;<br>    <span class="hljs-built_in">ASSERT</span>(obj);<br><br>    obj-&gt;<span class="hljs-built_in">rootDealloc</span>();<br>&#125;<br><br>objc_object::<span class="hljs-built_in">rootDealloc</span>()<br>&#123;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">isTaggedPointer</span>()) <span class="hljs-keyword">return</span>;  <span class="hljs-comment">// fixme necessary?</span><br><br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">fastpath</span>(isa.nonpointer                     &amp;&amp;<br>                 !isa.weakly_referenced             &amp;&amp;<br>                 !isa.has_assoc                     &amp;&amp;<br><span class="hljs-meta">#<span class="hljs-meta-keyword">if</span> ISA_HAS_CXX_DTOR_BIT</span><br>                 !isa.has_cxx_dtor                  &amp;&amp;<br><span class="hljs-meta">#<span class="hljs-meta-keyword">else</span></span><br>                 !isa.<span class="hljs-built_in">getClass</span>(<span class="hljs-literal">false</span>)-&gt;<span class="hljs-built_in">hasCxxDtor</span>() &amp;&amp;<br><span class="hljs-meta">#<span class="hljs-meta-keyword">endif</span></span><br>                 !isa.has_sidetable_rc))<br>    &#123;<br>        <span class="hljs-built_in">assert</span>(!<span class="hljs-built_in">sidetable_present</span>());<br>        <span class="hljs-built_in">free</span>(<span class="hljs-keyword">this</span>);<br>    &#125; <br>    <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">object_dispose</span>((id)<span class="hljs-keyword">this</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<blockquote>
+<p>如果是「nonpointer isa、没有弱引用表、没有关联对象、没有C++析构器、没有引用计数表」，则直接free对象。</p>
+</blockquote>
+<blockquote>
+<p>如果不是，则进入dispose流程，查看源码：</p>
+</blockquote>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs c++">id <br><span class="hljs-built_in">object_dispose</span>(id obj)<br>&#123;<br>    <span class="hljs-keyword">if</span> (!obj) <span class="hljs-keyword">return</span> nil;<br><br>    <span class="hljs-built_in">objc_destructInstance</span>(obj);    <br>    <span class="hljs-built_in">free</span>(obj);<br><br>    <span class="hljs-keyword">return</span> nil;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">void</span> *<span class="hljs-title">objc_destructInstance</span><span class="hljs-params">(id obj)</span> </span><br><span class="hljs-function"></span>&#123;<br>    <span class="hljs-keyword">if</span> (obj) &#123;<br>        <span class="hljs-comment">// Read all of the flags at once for performance.</span><br>        <span class="hljs-keyword">bool</span> cxx = obj-&gt;<span class="hljs-built_in">hasCxxDtor</span>();<br>        <span class="hljs-keyword">bool</span> assoc = obj-&gt;<span class="hljs-built_in">hasAssociatedObjects</span>();<br><br>        <span class="hljs-comment">// This order is important.</span><br>        <span class="hljs-keyword">if</span> (cxx) <span class="hljs-built_in">object_cxxDestruct</span>(obj);<br>        <span class="hljs-keyword">if</span> (assoc) _object_remove_assocations(obj, <span class="hljs-comment">/*deallocating*/</span><span class="hljs-literal">true</span>);<br>        obj-&gt;<span class="hljs-built_in">clearDeallocating</span>();<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> obj;<br>&#125;<br><br><span class="hljs-keyword">inline</span> <span class="hljs-keyword">void</span> <br>objc_object::<span class="hljs-built_in">clearDeallocating</span>()<br>&#123;<br>    <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(!isa.nonpointer)) &#123;<br>        <span class="hljs-comment">// Slow path for raw pointer isa.</span><br>        <span class="hljs-built_in">sidetable_clearDeallocating</span>();<br>    &#125;<br>    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (<span class="hljs-built_in">slowpath</span>(isa.weakly_referenced  ||  isa.has_sidetable_rc)) &#123;<br>        <span class="hljs-comment">// Slow path for non-pointer isa with weak refs and/or side table data.</span><br>        <span class="hljs-built_in">clearDeallocating_slow</span>();<br>    &#125;<br><br>    <span class="hljs-built_in">assert</span>(!<span class="hljs-built_in">sidetable_present</span>());<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>核心代码逻辑</strong>：</p>
+<ul>
+<li>如果有C++析构器，则析构</li>
+<li>如果有关联对象，移除关联</li>
+<li>如果不是nopointer isa，清空SideTable</li>
+<li>如果是nopointer isa，有弱引用表，清空弱引用表；有引用计数表，清空引用计数表</li>
+</ul>
+</section>
+    <!-- Tags START -->
+    
+    <!-- Tags END -->
+    <!-- NAV START -->
+    
+  <div class="nav-container">
+    <!-- reverse left and right to put prev and next in a more logic postition -->
+    
+      <a class="nav-left" href="/2021/05/19/Objective-C-Runtime-%E4%B8%80-%E5%88%9B%E5%BB%BA%E5%AF%B9%E8%B1%A1/">
+        <span class="nav-arrow">← </span>
+        
+          Objective-C Runtime(一) : 创建对象
+        
+      </a>
+    
+    
+      <a class="nav-right" href="/2021/08/24/iOS%E5%BA%94%E7%94%A8%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90/">
+        
+          iOS应用启动流程分析
+        
+        <span class="nav-arrow"> →</span>
+      </a>
+    
+  </div>
+
+    <!-- NAV END -->
+    <!-- 打赏 START -->
+    
+      <div class="money-like">
+        <div class="reward-btn">
+          赏
+          <span class="money-code">
+            <span class="alipay-code">
+              <div class="code-image"></div>
+              <b>使用支付宝打赏</b>
+            </span>
+            <span class="wechat-code">
+              <div class="code-image"></div>
+              <b>使用微信打赏</b>
+            </span>
+          </span>
+        </div>
+        <p class="notice">若你觉得我的文章对你有帮助，欢迎点击上方按钮对我打赏</p>
+      </div>
+    
+    <!-- 打赏 END -->
+    <!-- 二维码 START -->
+    
+    <!-- 二维码 END -->
+    
+      <!-- No Comment -->
+    
+  </article>
+  <!-- Article END -->
+  <!-- Catalog START -->
+  
+    <aside class="catalog-container">
+  <div class="toc-main">
+    <strong class="toc-title">Catalog</strong>
+    
+      <ol class="toc-nav"><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#retain"><span class="toc-nav-text">retain</span></a></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#release"><span class="toc-nav-text">release</span></a></li><li class="toc-nav-item toc-nav-level-1"><a class="toc-nav-link" href="#dealloc"><span class="toc-nav-text">dealloc</span></a></li></ol>
+    
+  </div>
+</aside>
+  
+  <!-- Catalog END -->
+</main>
+
+<script>
+  (function () {
+    var url = 'http://example.com/2021/05/29/Objective-C-Runtime-二-释放对象/';
+    var banner = ''
+    if (banner !== '' && banner !== 'undefined' && banner !== 'null') {
+      $('#article-banner').css({
+        'background-image': 'url(' + banner + ')'
+      })
+    } else {
+      $('#article-banner').geopattern(url)
+    }
+    $('.header').removeClass('fixed-header')
+
+    // error image
+    $(".markdown-content img").on('error', function() {
+      $(this).attr('src', 'http://file.muyutech.com/error-img.png')
+      $(this).css({
+        'cursor': 'default'
+      })
+    })
+
+    // zoom image
+    $(".markdown-content img").on('click', function() {
+      var src = $(this).attr('src')
+      if (src !== 'http://file.muyutech.com/error-img.png') {
+        var imageW = $(this).width()
+        var imageH = $(this).height()
+
+        var zoom = ($(window).width() * 0.95 / imageW).toFixed(2)
+        zoom = zoom < 1 ? 1 : zoom
+        zoom = zoom > 2 ? 2 : zoom
+        var transY = (($(window).height() - imageH) / 2).toFixed(2)
+
+        $('body').append('<div class="image-view-wrap"><div class="image-view-inner"><img src="'+ src +'" /></div></div>')
+        $('.image-view-wrap').addClass('wrap-active')
+        $('.image-view-wrap img').css({
+          'width': `${imageW}`,
+          'transform': `translate3d(0, ${transY}px, 0) scale3d(${zoom}, ${zoom}, 1)`
+        })
+        $('html').css('overflow', 'hidden')
+
+        $('.image-view-wrap').on('click', function() {
+          $(this).remove()
+          $('html').attr('style', '')
+        })
+      }
+    })
+  })();
+</script>
+
+
+
+
+
+
+
+    <div class="scroll-top">
+  <span class="arrow-icon"></span>
+</div>
+    <footer class="app-footer">
+  <p class="copyright">
+    &copy; 2021 <a href="https://github.com/ysunwill" target="_blank">ysunwill</a> | Powered by <a href="https://hexo.io" target="_blank">Hexo</a>
+  </p>
+</footer>
+
+<script>
+  function async(u, c) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+</script>
+<script>
+  async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+    FastClick.attach(document.body);
+  })
+</script>
+
+<script>
+  var hasLine = 'true';
+  async("//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js", function(){
+    $('figure pre').each(function(i, block) {
+      var figure = $(this).parents('figure');
+      if (hasLine === 'false') {
+        figure.find('.gutter').hide();
+      }
+      hljs.configure({useBR: true});
+      var lang = figure.attr('class').split(' ')[1] || 'code';
+      var codeHtml = $(this).html();
+      var codeTag = document.createElement('code');
+      codeTag.className = lang;
+      codeTag.innerHTML = codeHtml;
+      $(this).attr('class', '').empty().html(codeTag);
+      figure.attr('data-lang', lang.toUpperCase());
+      hljs.highlightBlock(block);
+    });
+  })
+</script>
+<!-- Baidu Tongji -->
+
+<script>
+    var _baId = 'bba77686b8c4943e7dcfb73c55f025a9';
+    // Originial
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?" + _baId;
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+
+
+<script src="/js/script.js"></script>
+
+  </body>
+</html>

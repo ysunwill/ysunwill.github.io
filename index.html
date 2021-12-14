@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport">
+  <meta name="description" content="ysunwill&#39;s blog">
+  <meta name="keyword" content="">
+  
+    <link rel="shortcut icon" href="/css/images/logo.png">
+  
+  <title>
+    
+      ysunwill
+    
+  </title>
+  <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css" rel="stylesheet">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/tomorrow.min.css" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/geopattern/1.2.3/js/geopattern.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+  
+  
+  
+  
+    <!-- MathJax support START -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      });
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      });
+    </script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <!-- MathJax support END -->
+  
+
+
+  
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-K5EQ3R1VEC"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-K5EQ3R1VEC');
+    </script>
+
+<meta name="generator" content="Hexo 5.4.0"></head>
+<div class="wechat-share">
+  <img src="/css/images/logo.png" />
+</div>
+
+  <body>
+    <header class="header fixed-header">
+  <div class="header-container">
+    <a class="home-link" href="/">
+      <div class="logo"></div>
+      <span>ysunwill</span>
+    </a>
+    <ul class="right-list">
+      
+        <li class="list-item">
+          
+            <a href="/" class="item-link active">Home</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a href="/archives/" class="item-link">Archives</a>
+          
+        </li>
+      
+        <li class="list-item">
+          
+            <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="item-link">GitHub</a>
+          
+        </li>
+      
+    </ul>
+    <div class="menu">
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </div>
+    <div class="menu-mask">
+      <ul class="menu-list">
+        
+          <li class="menu-item">
+            
+              <a href="/" class="menu-link mobile-active">Home</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a href="/archives/" class="menu-link">Archives</a>
+            
+          </li>
+        
+          <li class="menu-item">
+            
+              <a target="_blank" rel="noopener" href="https://github.com/ysunwill" class="menu-link">GitHub</a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</header>
+
+    <main class="app-body">
+  
+    <article class="article-card">
+      <h2 class="article-head">
+        <a href="/2021/09/18/%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90Objective-C-Block/">汇编分析Objective-C Block</a>
+      </h2>
+      <p class="article-date">September 18, 2021</p>
+      
+      <div class="article-summary">
+        
+          0x0 前言Block类似于闭包，在Objective-C中本质是一种特殊的对象。下面内容主要从汇编的角度去分析，脱离Block源码，所以需要一定的x86汇编（AT&amp;T汇编）知识。
+0x1 变量a是怎么传进block的？先看一段简单的block代码，并考虑上面的问题：
+1234567 ...
+        
+      </div>
+      <a class="more" href="/2021/09/18/%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90Objective-C-Block/">Read more</a>
+    </article>
+  
+    <article class="article-card">
+      <h2 class="article-head">
+        <a href="/2021/08/24/iOS%E5%BA%94%E7%94%A8%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90/">iOS应用启动流程分析</a>
+      </h2>
+      <p class="article-date">August 24, 2021</p>
+      
+      <div class="article-summary">
+        
+          app从冷启动开始到第一帧画面渲染完成，经过了很多的过程，以下主要分析pre-main阶段，也就是main函数调用之前的阶段。用户点击app后，内核会加载解析Mach-O文件，然后交给dyld继续加载，最后会来到main函数。
+XNU加载dyld流程dyld(the dynamic link ...
+        
+      </div>
+      <a class="more" href="/2021/08/24/iOS%E5%BA%94%E7%94%A8%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90/">Read more</a>
+    </article>
+  
+    <article class="article-card">
+      <h2 class="article-head">
+        <a href="/2021/05/29/Objective-C-Runtime-%E4%BA%8C-%E9%87%8A%E6%94%BE%E5%AF%B9%E8%B1%A1/">Objective-C Runtime(二) : 释放对象</a>
+      </h2>
+      <p class="article-date">May 29, 2021</p>
+      
+      <div class="article-summary">
+        
+          上回说到创建对象，这回来说下释放对象。在iOS中，使用引用计数来管理对象内存。iOS5之前，使用手动引用计数MRC(Manual Reference Counting)来管理内存，后面又推出了使用更广泛的自动引用计数ARC(Automatic Reference Counting)。MRC需 ...
+        
+      </div>
+      <a class="more" href="/2021/05/29/Objective-C-Runtime-%E4%BA%8C-%E9%87%8A%E6%94%BE%E5%AF%B9%E8%B1%A1/">Read more</a>
+    </article>
+  
+    <article class="article-card">
+      <h2 class="article-head">
+        <a href="/2021/05/19/Objective-C-Runtime-%E4%B8%80-%E5%88%9B%E5%BB%BA%E5%AF%B9%E8%B1%A1/">Objective-C Runtime(一) : 创建对象</a>
+      </h2>
+      <p class="article-date">May 19, 2021</p>
+      
+      <div class="article-summary">
+        
+          可能每天都跟对象打交道，但是OC对象是怎么创建出来的，具体是怎样的一个流程，让我们通过调试Runtime源码一探究竟。以下内容基于objc4-818.2版本源码探索。
+Tagged Pointer先说下比较特殊的“对象”，Tagged Pointer，保存在常量区，并不在堆区，不通过mall ...
+        
+      </div>
+      <a class="more" href="/2021/05/19/Objective-C-Runtime-%E4%B8%80-%E5%88%9B%E5%BB%BA%E5%AF%B9%E8%B1%A1/">Read more</a>
+    </article>
+  
+    <article class="article-card">
+      <h2 class="article-head">
+        <a href="/2021/04/30/Hexo-GitHub-Actions%E6%90%AD%E5%BB%BA%E6%97%A5%E8%AE%B0/">Hexo + GitHub Actions搭建日记</a>
+      </h2>
+      <p class="article-date">April 30, 2021</p>
+      
+      <div class="article-summary">
+        
+          电脑前段时间重装了系统，索性一并把博客翻新，主要使用Hexo和GitHub Actions，页面部署在GitHub Pages。记录下搭建过程，如果你也有类似需求，可以当作参考。
+
+搭建环境：
+macOS Big Sur
+
+安装Hexo
+安装nvm（通过Homebrew安装）
+
+1brew  ...
+        
+      </div>
+      <a class="more" href="/2021/04/30/Hexo-GitHub-Actions%E6%90%AD%E5%BB%BA%E6%97%A5%E8%AE%B0/">Read more</a>
+    </article>
+  
+
+  
+</main>
+
+
+    <div class="scroll-top">
+  <span class="arrow-icon"></span>
+</div>
+    <footer class="app-footer">
+  <p class="copyright">
+    &copy; 2021 <a href="https://github.com/ysunwill" target="_blank">ysunwill</a> | Powered by <a href="https://hexo.io" target="_blank">Hexo</a>
+  </p>
+</footer>
+
+<script>
+  function async(u, c) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+</script>
+<script>
+  async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+    FastClick.attach(document.body);
+  })
+</script>
+
+<script>
+  var hasLine = 'true';
+  async("//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js", function(){
+    $('figure pre').each(function(i, block) {
+      var figure = $(this).parents('figure');
+      if (hasLine === 'false') {
+        figure.find('.gutter').hide();
+      }
+      hljs.configure({useBR: true});
+      var lang = figure.attr('class').split(' ')[1] || 'code';
+      var codeHtml = $(this).html();
+      var codeTag = document.createElement('code');
+      codeTag.className = lang;
+      codeTag.innerHTML = codeHtml;
+      $(this).attr('class', '').empty().html(codeTag);
+      figure.attr('data-lang', lang.toUpperCase());
+      hljs.highlightBlock(block);
+    });
+  })
+</script>
+<!-- Baidu Tongji -->
+
+<script>
+    var _baId = 'bba77686b8c4943e7dcfb73c55f025a9';
+    // Originial
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?" + _baId;
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+
+
+<script src="/js/script.js"></script>
+
+  </body>
+</html>
